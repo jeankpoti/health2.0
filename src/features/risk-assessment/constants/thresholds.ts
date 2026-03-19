@@ -124,8 +124,8 @@ export const INVALID_DATA_SCORE = 0;
 // API CONFIGURATION
 // ============================================================================
 
-/** Maximum patients per API request */
-export const API_PAGE_LIMIT = 20;
+/** Patients per page for display */
+export const API_PAGE_LIMIT = 10;
 
 /** Maximum retry attempts for failed requests */
 export const MAX_RETRY_ATTEMPTS = 3;

@@ -29,6 +29,7 @@ interface PatientListProps {
   patients: string[];
   variant: 'danger' | 'warning' | 'default';
   isLoading: boolean;
+  index?: number;
 }
 
 /**
@@ -40,6 +41,7 @@ function PatientListCard({
   patients,
   variant,
   isLoading,
+  index = 0,
 }: PatientListProps) {
   const badgeVariant = {
     danger: 'destructive' as const,
@@ -50,12 +52,22 @@ function PatientListCard({
   const borderColor = {
     danger: 'border-l-red-500',
     warning: 'border-l-amber-500',
-    default: 'border-l-slate-500',
+    default: 'border-l-slate-500 dark:border-l-slate-400',
   };
+
+  const baseClasses = `
+    border-l-4 ${borderColor[variant]}
+    transition-all duration-300 ease-out
+    hover:shadow-lg hover:-translate-y-1
+    animate-fade-in-up
+  `;
 
   if (isLoading) {
     return (
-      <Card className={`border-l-4 ${borderColor[variant]}`}>
+      <Card
+        className={baseClasses}
+        style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}
+      >
         <CardHeader>
           <div className="flex items-center justify-between">
             <Skeleton className="h-5 w-32" />
@@ -75,11 +87,19 @@ function PatientListCard({
   }
 
   return (
-    <Card className={`border-l-4 ${borderColor[variant]}`}>
+    <Card
+      className={baseClasses}
+      style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{title}</CardTitle>
-          <Badge variant={badgeVariant[variant]}>{patients.length}</Badge>
+          <Badge
+            variant={badgeVariant[variant]}
+            className={variant === 'danger' && patients.length > 0 ? 'animate-pulse' : ''}
+          >
+            {patients.length}
+          </Badge>
         </div>
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
@@ -91,7 +111,11 @@ function PatientListCard({
         ) : (
           <div className="flex flex-wrap gap-2">
             {patients.map((patientId) => (
-              <Badge key={patientId} variant="outline" className="font-mono">
+              <Badge
+                key={patientId}
+                variant="outline"
+                className="font-mono transition-transform hover:scale-105"
+              >
                 {patientId}
               </Badge>
             ))}
@@ -130,6 +154,7 @@ export function AlertLists() {
         patients={highRiskPatients}
         variant="danger"
         isLoading={isLoading}
+        index={0}
       />
       <PatientListCard
         title="Fever Patients"
@@ -137,6 +162,7 @@ export function AlertLists() {
         patients={feverPatients}
         variant="warning"
         isLoading={isLoading}
+        index={1}
       />
       <PatientListCard
         title="Data Quality Issues"
@@ -144,6 +170,7 @@ export function AlertLists() {
         patients={dataQualityIssues}
         variant="default"
         isLoading={isLoading}
+        index={2}
       />
     </div>
   );

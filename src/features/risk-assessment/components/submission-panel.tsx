@@ -2,7 +2,7 @@
  * @fileoverview Assessment submission panel with results display.
  *
  * Features:
- * - Fetch patients button
+ * - Load all patients button (required before submission)
  * - Submit assessment button
  * - Loading progress indicator
  * - Detailed results display with feedback
@@ -10,16 +10,11 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import {
-  usePatientStore,
-  selectLoadingProgress,
-  usePatientStats,
-} from '../store/patient-store';
+import { usePatientStore, usePatientStats } from '../store/patient-store';
 
 // ============================================================================
 // HELPER COMPONENTS
@@ -121,7 +116,7 @@ function FeedbackList({
 /**
  * Submission panel component.
  *
- * Provides controls for fetching patients and submitting assessment,
+ * Provides controls for loading all patients and submitting assessment,
  * along with detailed results display.
  *
  * @example
@@ -130,60 +125,79 @@ function FeedbackList({
  * ```
  */
 export function SubmissionPanel() {
-  const fetchPatients = usePatientStore((state) => state.fetchPatients);
+  const loadAllForSubmission = usePatientStore((state) => state.loadAllForSubmission);
   const submitAssessment = usePatientStore((state) => state.submitAssessment);
-  const isLoading = usePatientStore((state) => state.isLoading);
+  const isLoadingAll = usePatientStore((state) => state.isLoadingAll);
+  const allPatientsLoaded = usePatientStore((state) => state.allPatientsLoaded);
+  const allPatients = usePatientStore((state) => state.allPatients);
   const isSubmitting = usePatientStore((state) => state.isSubmitting);
   const error = usePatientStore((state) => state.error);
   const submissionError = usePatientStore((state) => state.submissionError);
   const submission = usePatientStore((state) => state.submission);
-  const loadingProgress = usePatientStore(selectLoadingProgress);
   const stats = usePatientStats();
 
-  // Auto-fetch patients on mount (only once)
-  const hasFetchedRef = useRef(false);
-  useEffect(() => {
-    if (!hasFetchedRef.current) {
-      hasFetchedRef.current = true;
-      fetchPatients();
-    }
-  }, [fetchPatients]);
-
-  const hasPatients = stats.totalPatients > 0;
+  const canSubmit = allPatientsLoaded && allPatients.length > 0 && !isSubmitting;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       {/* Action Buttons */}
-      <Card>
+      <Card className="transition-shadow duration-300 hover:shadow-md">
         <CardHeader>
-          <CardTitle>Assessment Actions</CardTitle>
+          <CardTitle>Assessment Submission</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Load All Patients Section */}
+          {!allPatientsLoaded && (
+            <Alert>
+              <AlertTitle>Load All Patients Required</AlertTitle>
+              <AlertDescription>
+                You are viewing page {stats.currentPage} of {stats.totalPages}.
+                To submit your assessment, you must first load all {stats.totalPatients} patients.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex gap-4">
             <Button
-              onClick={fetchPatients}
-              disabled={isLoading}
+              onClick={loadAllForSubmission}
+              disabled={isLoadingAll || allPatientsLoaded}
               variant="outline"
+              className="transition-all duration-200 active:scale-95"
             >
-              {isLoading ? 'Loading...' : 'Refresh Patients'}
+              {isLoadingAll
+                ? 'Loading All Patients...'
+                : allPatientsLoaded
+                  ? `All ${allPatients.length} Patients Loaded`
+                  : 'Load All Patients'}
             </Button>
             <Button
               onClick={submitAssessment}
-              disabled={isSubmitting || !hasPatients}
+              disabled={!canSubmit}
+              className="transition-all duration-200 active:scale-95"
             >
               {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
             </Button>
           </div>
 
           {/* Loading Progress */}
-          {isLoading && (
+          {isLoadingAll && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Loading patients...</span>
-                <span>{loadingProgress}%</span>
+                <span>Loading all patients for submission...</span>
               </div>
-              <ProgressBar progress={loadingProgress} />
+              <ProgressBar progress={50} />
             </div>
+          )}
+
+          {/* Success indicator when all loaded */}
+          {allPatientsLoaded && !submission && (
+            <Alert className="border-green-200 bg-green-50">
+              <AlertTitle className="text-green-800">Ready to Submit</AlertTitle>
+              <AlertDescription className="text-green-700">
+                All {allPatients.length} patients loaded. Categories have been calculated
+                from the complete dataset. Click "Submit Assessment" to submit your results.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Error Display */}
@@ -205,13 +219,14 @@ export function SubmissionPanel() {
 
       {/* Submission Results */}
       {submission && (
-        <Card>
+        <Card className="animate-fade-in-up transition-shadow duration-300 hover:shadow-lg">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Assessment Results</CardTitle>
               <Badge
                 variant={submission.results.status === 'PASS' ? 'default' : 'destructive'}
-                className="text-lg px-3 py-1"
+                className="text-lg px-3 py-1 animate-bounce"
+                style={{ animationIterationCount: 3 }}
               >
                 {submission.results.status}
               </Badge>
@@ -247,7 +262,7 @@ export function SubmissionPanel() {
             {/* Personal Best Indicator */}
             {submission.results.is_personal_best && (
               <Alert>
-                <AlertTitle>🎉 Personal Best!</AlertTitle>
+                <AlertTitle>Personal Best!</AlertTitle>
                 <AlertDescription>
                   This is your highest score so far.
                 </AlertDescription>

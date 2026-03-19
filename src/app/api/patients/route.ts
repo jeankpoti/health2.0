@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // Extract query parameters
     const { searchParams } = new URL(request.url);
     const page = searchParams.get('page') ?? '1';
-    const limit = searchParams.get('limit') ?? '5';
+    const limit = searchParams.get('limit') ?? '10';
 
     // Build external API URL
     const externalUrl = `${EXTERNAL_API_BASE}/patients?page=${page}&limit=${limit}`;

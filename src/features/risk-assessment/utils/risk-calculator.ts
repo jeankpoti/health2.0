@@ -391,19 +391,21 @@ export function categorizePatients(patients: Patient[]): CategorizedPatients {
   for (const patient of patients) {
     const riskScore = calculatePatientRisk(patient);
 
+    // Check for data quality issues first
+    if (riskScore.hasDataQualityIssue) {
+      dataQualityIssues.push(patient.patient_id);
+    }
+
     // Check for high risk (total score >= 4)
-    if (riskScore.totalScore >= HIGH_RISK_THRESHOLD) {
+    // IMPORTANT: Only patients with COMPLETE valid data can be classified as high-risk
+    // Patients with data quality issues have incomplete scores and should not be included
+    if (!riskScore.hasDataQualityIssue && riskScore.totalScore >= HIGH_RISK_THRESHOLD) {
       highRiskPatients.push(patient.patient_id);
     }
 
     // Check for fever (temp >= 99.6°F) - independent of data quality
     if (hasFever(patient.temperature)) {
       feverPatients.push(patient.patient_id);
-    }
-
-    // Check for data quality issues
-    if (riskScore.hasDataQualityIssue) {
-      dataQualityIssues.push(patient.patient_id);
     }
   }
 

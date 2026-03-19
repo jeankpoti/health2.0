@@ -2,28 +2,18 @@
  * @fileoverview Zustand store for patient data and risk assessment state.
  *
  * This store manages:
- * - Patient data fetching and caching
+ * - Patient data fetching with pagination
  * - Risk score calculations
  * - Assessment submission state
  * - Loading and error states
- *
- * @example
- * ```tsx
- * // In a component
- * const patients = usePatientStore((state) => state.patients);
- * const fetchPatients = usePatientStore((state) => state.fetchPatients);
- *
- * useEffect(() => {
- *   fetchPatients();
- * }, [fetchPatients]);
- * ```
  */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
-import { fetchAllPatients, submitAssessment } from '../services/patient-api';
+import { fetchPatientPage, fetchAllPatients, submitAssessment } from '../services/patient-api';
 import { calculatePatientRisk, categorizePatients } from '../utils/risk-calculator';
+import { API_PAGE_LIMIT } from '../constants/thresholds';
 import type { Patient, PatientWithRisk, CategorizedPatients, AssessmentPayload } from '../types';
 import type { SubmissionResponse } from '@/types/api';
 
@@ -31,19 +21,29 @@ import type { SubmissionResponse } from '@/types/api';
 // TYPES
 // ============================================================================
 
-interface FetchProgress {
-  current: number;
-  total: number;
-}
-
 interface PatientState {
-  // Patient Data
+  // Current page patients (for display)
   patients: PatientWithRisk[];
+
+  // All loaded patients (for submission)
+  allPatients: PatientWithRisk[];
+  allPatientsLoaded: boolean;
+
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+  totalPatients: number;
+  pageSize: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+
+  // Categories (from allPatients when loaded, otherwise current page)
   categories: CategorizedPatients | null;
+
+  // Loading states
   isLoading: boolean;
+  isLoadingAll: boolean;
   error: string | null;
-  fetchProgress: FetchProgress | null;
-  lastFetchedAt: Date | null;
 
   // Submission State
   submission: SubmissionResponse | null;
@@ -52,11 +52,12 @@ interface PatientState {
 }
 
 interface PatientActions {
-  // Actions
-  fetchPatients: () => Promise<void>;
+  fetchPage: (page: number) => Promise<void>;
+  nextPage: () => Promise<void>;
+  prevPage: () => Promise<void>;
+  loadAllForSubmission: () => Promise<void>;
   submitAssessment: () => Promise<void>;
   reset: () => void;
-  clearSubmission: () => void;
 }
 
 type PatientStore = PatientState & PatientActions;
@@ -67,11 +68,18 @@ type PatientStore = PatientState & PatientActions;
 
 const initialState: PatientState = {
   patients: [],
+  allPatients: [],
+  allPatientsLoaded: false,
+  currentPage: 1,
+  totalPages: 0,
+  totalPatients: 0,
+  pageSize: API_PAGE_LIMIT,
+  hasNext: false,
+  hasPrevious: false,
   categories: null,
   isLoading: false,
+  isLoadingAll: false,
   error: null,
-  fetchProgress: null,
-  lastFetchedAt: null,
   submission: null,
   isSubmitting: false,
   submissionError: null,
@@ -81,95 +89,119 @@ const initialState: PatientState = {
 // STORE
 // ============================================================================
 
-/**
- * Zustand store for patient risk assessment.
- *
- * Uses the devtools middleware for debugging in development.
- */
 export const usePatientStore = create<PatientStore>()(
   devtools(
     (set, get) => ({
       ...initialState,
 
       /**
-       * Fetches all patients from the API and calculates risk scores.
-       *
-       * Handles pagination automatically and updates progress state.
-       * Results are cached in the store.
+       * Fetches a specific page of patients.
        */
-      fetchPatients: async () => {
-        // Prevent concurrent fetches
-        if (get().isLoading) {
-          return;
-        }
+      fetchPage: async (page: number) => {
+        if (get().isLoading) return;
 
-        set({
-          isLoading: true,
-          error: null,
-          fetchProgress: { current: 0, total: 0 },
-        });
+        set({ isLoading: true, error: null });
 
         try {
-          const rawPatients = await fetchAllPatients((progress) => {
-            set({
-              fetchProgress: {
-                current: progress.patientsLoaded,
-                total: progress.totalPatients,
-              },
-            });
-          });
+          const response = await fetchPatientPage(page, API_PAGE_LIMIT);
 
-          // Calculate risk scores for all patients
-          const patientsWithRisk: PatientWithRisk[] = rawPatients.map((patient) => ({
+          const patientsWithRisk: PatientWithRisk[] = response.data.map((patient) => ({
             ...patient,
             riskScore: calculatePatientRisk(patient),
           }));
 
-          // Categorize patients for submission
-          const categories = categorizePatients(rawPatients);
+          // Calculate categories for current page
+          const categories = categorizePatients(response.data);
 
           set({
             patients: patientsWithRisk,
+            currentPage: response.pagination.page,
+            totalPages: response.pagination.totalPages,
+            totalPatients: response.pagination.total,
+            hasNext: response.pagination.hasNext,
+            hasPrevious: response.pagination.hasPrevious,
             categories,
             isLoading: false,
-            fetchProgress: null,
-            lastFetchedAt: new Date(),
           });
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Failed to fetch patients';
+          set({
+            error: error instanceof Error ? error.message : 'Failed to fetch patients',
+            isLoading: false,
+          });
+        }
+      },
+
+      /**
+       * Navigate to next page.
+       */
+      nextPage: async () => {
+        const { currentPage, hasNext } = get();
+        if (hasNext) {
+          await get().fetchPage(currentPage + 1);
+        }
+      },
+
+      /**
+       * Navigate to previous page.
+       */
+      prevPage: async () => {
+        const { currentPage, hasPrevious } = get();
+        if (hasPrevious) {
+          await get().fetchPage(currentPage - 1);
+        }
+      },
+
+      /**
+       * Load all patients for submission.
+       */
+      loadAllForSubmission: async () => {
+        if (get().isLoadingAll || get().allPatientsLoaded) return;
+
+        set({ isLoadingAll: true, error: null });
+
+        try {
+          const rawPatients = await fetchAllPatients();
+
+          const allPatientsWithRisk: PatientWithRisk[] = rawPatients.map((patient) => ({
+            ...patient,
+            riskScore: calculatePatientRisk(patient),
+          }));
+
+          const categories = categorizePatients(rawPatients);
 
           set({
-            error: errorMessage,
-            isLoading: false,
-            fetchProgress: null,
+            allPatients: allPatientsWithRisk,
+            allPatientsLoaded: true,
+            categories,
+            isLoadingAll: false,
+          });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to load all patients',
+            isLoadingAll: false,
           });
         }
       },
 
       /**
        * Submits the assessment results to the API.
-       *
-       * Uses the categorized patient lists from the current state.
        */
       submitAssessment: async () => {
-        const { categories, isSubmitting } = get();
+        const { categories, isSubmitting, allPatientsLoaded } = get();
 
-        // Prevent concurrent submissions
-        if (isSubmitting) {
+        if (isSubmitting) return;
+
+        if (!allPatientsLoaded) {
+          set({ submissionError: 'Please load all patients first before submitting.' });
           return;
         }
 
-        // Ensure we have data to submit
         if (!categories) {
-          set({ submissionError: 'No patient data loaded. Please fetch patients first.' });
+          set({ submissionError: 'No patient data available.' });
           return;
         }
 
-        set({
-          isSubmitting: true,
-          submissionError: null,
-        });
+        set({ isSubmitting: true, submissionError: null });
 
         try {
           const payload: AssessmentPayload = {
@@ -185,96 +217,73 @@ export const usePatientStore = create<PatientStore>()(
             isSubmitting: false,
           });
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Failed to submit assessment';
-
           set({
-            submissionError: errorMessage,
+            submissionError: error instanceof Error ? error.message : 'Failed to submit',
             isSubmitting: false,
           });
         }
       },
 
       /**
-       * Resets the entire store to initial state.
+       * Resets the store to initial state.
        */
-      reset: () => {
-        set(initialState);
-      },
-
-      /**
-       * Clears only the submission state (for retrying).
-       */
-      clearSubmission: () => {
-        set({
-          submission: null,
-          submissionError: null,
-        });
-      },
+      reset: () => set(initialState),
     }),
-    {
-      name: 'patient-store',
-      enabled: process.env.NODE_ENV === 'development',
-    }
+    { name: 'patient-store', enabled: process.env.NODE_ENV === 'development' }
   )
 );
 
 // ============================================================================
-// SELECTORS (using useShallow to prevent infinite re-renders)
+// HOOKS WITH useShallow (prevents infinite re-renders)
 // ============================================================================
 
-/** Empty array constant to avoid creating new references */
 const EMPTY_ARRAY: string[] = [];
 
-/**
- * Hook for high-risk patient IDs with shallow comparison.
- */
 export const useHighRiskPatients = () => {
   return usePatientStore(
     useShallow((state) => state.categories?.highRiskPatients ?? EMPTY_ARRAY)
   );
 };
 
-/**
- * Hook for fever patient IDs with shallow comparison.
- */
 export const useFeverPatients = () => {
   return usePatientStore(
     useShallow((state) => state.categories?.feverPatients ?? EMPTY_ARRAY)
   );
 };
 
-/**
- * Hook for data quality issue patient IDs with shallow comparison.
- */
 export const useDataQualityIssues = () => {
   return usePatientStore(
     useShallow((state) => state.categories?.dataQualityIssues ?? EMPTY_ARRAY)
   );
 };
 
-/**
- * Hook for summary statistics with shallow comparison.
- * Uses useShallow to prevent infinite re-renders.
- */
 export const usePatientStats = () => {
   return usePatientStore(
     useShallow((state) => ({
-      totalPatients: state.patients.length,
+      totalPatients: state.totalPatients,
       highRiskCount: state.categories?.highRiskPatients.length ?? 0,
       feverCount: state.categories?.feverPatients.length ?? 0,
       dataQualityCount: state.categories?.dataQualityIssues.length ?? 0,
+      isLoading: state.isLoading,
+      currentPage: state.currentPage,
+      totalPages: state.totalPages,
+    }))
+  );
+};
+
+export const usePagination = () => {
+  return usePatientStore(
+    useShallow((state) => ({
+      currentPage: state.currentPage,
+      totalPages: state.totalPages,
+      hasNext: state.hasNext,
+      hasPrevious: state.hasPrevious,
       isLoading: state.isLoading,
     }))
   );
 };
 
-/**
- * Selector for loading progress as percentage.
- */
 export const selectLoadingProgress = (state: PatientStore): number => {
-  if (!state.fetchProgress || state.fetchProgress.total === 0) {
-    return 0;
-  }
-  return Math.round((state.fetchProgress.current / state.fetchProgress.total) * 100);
+  if (state.totalPages === 0) return 0;
+  return Math.round((state.currentPage / state.totalPages) * 100);
 };

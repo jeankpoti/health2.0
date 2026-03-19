@@ -24,22 +24,40 @@ interface StatCardProps {
   description: string;
   variant?: 'default' | 'warning' | 'danger' | 'info';
   isLoading?: boolean;
+  index?: number;
 }
 
 /**
- * Individual statistic card.
+ * Individual statistic card with animations.
  */
-function StatCard({ title, value, description, variant = 'default', isLoading }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  description,
+  variant = 'default',
+  isLoading,
+  index = 0,
+}: StatCardProps) {
   const variantStyles = {
-    default: 'border-l-4 border-l-slate-500',
+    default: 'border-l-4 border-l-slate-500 dark:border-l-slate-400',
     warning: 'border-l-4 border-l-amber-500',
     danger: 'border-l-4 border-l-red-500',
     info: 'border-l-4 border-l-blue-500',
   };
 
+  const baseClasses = `
+    ${variantStyles[variant]}
+    transition-all duration-300 ease-out
+    hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02]
+    animate-fade-in-up
+  `;
+
   if (isLoading) {
     return (
-      <Card className={variantStyles[variant]}>
+      <Card
+        className={baseClasses}
+        style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}
+      >
         <CardHeader className="pb-2">
           <Skeleton className="h-4 w-24" />
         </CardHeader>
@@ -52,14 +70,17 @@ function StatCard({ title, value, description, variant = 'default', isLoading }:
   }
 
   return (
-    <Card className={variantStyles[variant]}>
+    <Card
+      className={baseClasses}
+      style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}
+    >
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
+        <div className="text-3xl font-bold tabular-nums">{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{description}</p>
       </CardContent>
     </Card>
@@ -91,6 +112,7 @@ export function RiskSummaryCards() {
         description="Patients loaded from API"
         variant="info"
         isLoading={stats.isLoading}
+        index={0}
       />
       <StatCard
         title="High Risk"
@@ -98,6 +120,7 @@ export function RiskSummaryCards() {
         description="Risk score ≥ 4"
         variant="danger"
         isLoading={stats.isLoading}
+        index={1}
       />
       <StatCard
         title="Fever Patients"
@@ -105,6 +128,7 @@ export function RiskSummaryCards() {
         description="Temperature ≥ 99.6°F"
         variant="warning"
         isLoading={stats.isLoading}
+        index={2}
       />
       <StatCard
         title="Data Quality Issues"
@@ -112,6 +136,7 @@ export function RiskSummaryCards() {
         description="Missing or invalid data"
         variant="default"
         isLoading={stats.isLoading}
+        index={3}
       />
     </div>
   );

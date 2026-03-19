@@ -28,6 +28,7 @@ export {
   useFeverPatients,
   useDataQualityIssues,
   usePatientStats,
+  usePagination,
   selectLoadingProgress,
 } from './store/patient-store';
 

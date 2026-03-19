@@ -1,16 +1,10 @@
 /**
- * @fileoverview Patient data table with risk score display.
- *
- * Features:
- * - Sortable columns
- * - Risk score badges
- * - Data quality issue indicators
- * - Responsive design
+ * @fileoverview Patient data table with pagination and risk score display.
  */
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -21,7 +15,8 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePatientStore } from '../store/patient-store';
+import { Button } from '@/components/ui/button';
+import { usePatientStore, usePagination } from '../store/patient-store';
 import { HIGH_RISK_THRESHOLD, FEVER_THRESHOLD } from '../constants/thresholds';
 import type { PatientWithRisk } from '../types';
 
@@ -36,9 +31,6 @@ type SortDirection = 'asc' | 'desc';
 // HELPER COMPONENTS
 // ============================================================================
 
-/**
- * Badge component for risk score display.
- */
 function RiskBadge({ score }: { score: number }) {
   if (score >= HIGH_RISK_THRESHOLD) {
     return <Badge variant="destructive">High Risk ({score})</Badge>;
@@ -49,9 +41,6 @@ function RiskBadge({ score }: { score: number }) {
   return <Badge variant="outline">Low ({score})</Badge>;
 }
 
-/**
- * Badge for temperature with fever indication.
- */
 function TemperatureBadge({ temp }: { temp: number | string | null | undefined }) {
   if (temp === null || temp === undefined) {
     return <span className="text-muted-foreground">N/A</span>;
@@ -66,7 +55,7 @@ function TemperatureBadge({ temp }: { temp: number | string | null | undefined }
   if (tempValue >= FEVER_THRESHOLD) {
     return (
       <span className="text-red-600 font-medium">
-        {tempValue.toFixed(1)}°F 🌡️
+        {tempValue.toFixed(1)}°F
       </span>
     );
   }
@@ -74,24 +63,18 @@ function TemperatureBadge({ temp }: { temp: number | string | null | undefined }
   return <span>{tempValue.toFixed(1)}°F</span>;
 }
 
-/**
- * Data quality indicator.
- */
 function DataQualityIndicator({ issues }: { issues: string[] }) {
   if (issues.length === 0) {
-    return <span className="text-green-600">✓</span>;
+    return <span className="text-green-600">Valid</span>;
   }
 
   return (
     <span className="text-amber-600 cursor-help" title={issues.join('\n')}>
-      ⚠️ {issues.length}
+      {issues.length} issue(s)
     </span>
   );
 }
 
-/**
- * Sortable column header.
- */
 function SortableHeader({
   label,
   field,
@@ -121,6 +104,44 @@ function SortableHeader({
 }
 
 // ============================================================================
+// PAGINATION CONTROLS
+// ============================================================================
+
+function PaginationControls() {
+  const pagination = usePagination();
+  const nextPage = usePatientStore((state) => state.nextPage);
+  const prevPage = usePatientStore((state) => state.prevPage);
+
+  return (
+    <div className="flex items-center justify-between px-2 py-4">
+      <div className="text-sm text-muted-foreground tabular-nums">
+        Page {pagination.currentPage} of {pagination.totalPages}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={prevPage}
+          disabled={!pagination.hasPrevious || pagination.isLoading}
+          className="transition-all duration-200 active:scale-95"
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={nextPage}
+          disabled={!pagination.hasNext || pagination.isLoading}
+          className="transition-all duration-200 active:scale-95"
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // LOADING SKELETON
 // ============================================================================
 
@@ -139,7 +160,7 @@ function TableSkeleton() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: 5 }).map((_, i) => (
           <TableRow key={i}>
             {Array.from({ length: 7 }).map((_, j) => (
               <TableCell key={j}>
@@ -157,24 +178,24 @@ function TableSkeleton() {
 // MAIN COMPONENT
 // ============================================================================
 
-/**
- * Patient data table component.
- *
- * Displays all patients with their risk scores and data quality indicators.
- * Supports sorting by various columns.
- *
- * @example
- * ```tsx
- * <PatientTable />
- * ```
- */
 export function PatientTable() {
   const patients = usePatientStore((state) => state.patients);
   const isLoading = usePatientStore((state) => state.isLoading);
   const error = usePatientStore((state) => state.error);
+  const totalPages = usePatientStore((state) => state.totalPages);
+  const fetchPage = usePatientStore((state) => state.fetchPage);
 
   const [sortField, setSortField] = useState<SortField>('patient_id');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Fetch first page on mount
+  const hasFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchPage(1);
+    }
+  }, [fetchPage]);
 
   // Sort patients
   const sortedPatients = useMemo(() => {
@@ -213,7 +234,6 @@ export function PatientTable() {
     });
   }, [patients, sortField, sortDirection]);
 
-  // Handle sort toggle
   const handleSort = (field: SortField) => {
     if (field === sortField) {
       setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -223,107 +243,112 @@ export function PatientTable() {
     }
   };
 
-  // Loading state
-  if (isLoading) {
+  if (isLoading && patients.length === 0) {
     return <TableSkeleton />;
   }
 
-  // Error state
   if (error) {
     return (
       <div className="text-center py-8 text-red-600">
-        <p>Error loading patients: {error}</p>
+        <p>Error: {error}</p>
       </div>
     );
   }
 
-  // Empty state
   if (patients.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        <p>No patients loaded. Click &quot;Fetch Patients&quot; to load data.</p>
+        <p>No patients loaded.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              <SortableHeader
-                label="Patient ID"
-                field="patient_id"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label="Name"
-                field="name"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label="Age"
-                field="age"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead>Blood Pressure</TableHead>
-            <TableHead>
-              <SortableHeader
-                label="Temperature"
-                field="temperature"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label="Risk Score"
-                field="totalScore"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead>Data Quality</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedPatients.map((patient) => (
-            <TableRow key={patient.patient_id}>
-              <TableCell className="font-mono">{patient.patient_id}</TableCell>
-              <TableCell>{patient.name}</TableCell>
-              <TableCell>
-                {patient.age !== null && patient.age !== undefined
-                  ? patient.age
-                  : 'N/A'}
-              </TableCell>
-              <TableCell>{patient.blood_pressure ?? 'N/A'}</TableCell>
-              <TableCell>
-                <TemperatureBadge temp={patient.temperature} />
-              </TableCell>
-              <TableCell>
-                <RiskBadge score={patient.riskScore.totalScore} />
-              </TableCell>
-              <TableCell>
-                <DataQualityIndicator issues={patient.riskScore.dataQualityIssues} />
-              </TableCell>
+    <div className="space-y-4 animate-fade-in">
+      <div className="rounded-md border transition-shadow duration-300 hover:shadow-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <SortableHeader
+                  label="Patient ID"
+                  field="patient_id"
+                  currentField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label="Name"
+                  field="name"
+                  currentField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label="Age"
+                  field="age"
+                  currentField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>Blood Pressure</TableHead>
+              <TableHead>
+                <SortableHeader
+                  label="Temperature"
+                  field="temperature"
+                  currentField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label="Risk Score"
+                  field="totalScore"
+                  currentField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>Data Quality</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {sortedPatients.map((patient) => (
+              <TableRow
+                key={patient.patient_id}
+                className="transition-colors duration-200 hover:bg-muted/50"
+              >
+                <TableCell className="font-mono">{patient.patient_id}</TableCell>
+                <TableCell>{patient.name}</TableCell>
+                <TableCell>
+                  {patient.age !== null && patient.age !== undefined
+                    ? patient.age
+                    : 'N/A'}
+                </TableCell>
+                <TableCell>{patient.blood_pressure ?? 'N/A'}</TableCell>
+                <TableCell>
+                  <TemperatureBadge temp={patient.temperature} />
+                </TableCell>
+                <TableCell>
+                  <RiskBadge score={patient.riskScore.totalScore} />
+                </TableCell>
+                <TableCell>
+                  <DataQualityIndicator issues={patient.riskScore.dataQualityIssues} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && <PaginationControls />}
     </div>
   );
 }

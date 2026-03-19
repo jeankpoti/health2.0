@@ -151,8 +151,8 @@ export function SubmissionPanel() {
             <Alert>
               <AlertTitle>Load All Patients Required</AlertTitle>
               <AlertDescription>
-                You are viewing page {stats.currentPage} of {stats.totalPages}.
-                To submit your assessment, you must first load all {stats.totalPatients} patients.
+                You are viewing page {stats.currentPage} of {stats.totalPages} (total: {stats.totalPatients} patients).
+                To submit your assessment, you must first load all patients.
               </AlertDescription>
             </Alert>
           )}

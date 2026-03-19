@@ -12,7 +12,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePatientStore, selectStats } from '../store/patient-store';
+import { usePatientStats } from '../store/patient-store';
 
 // ============================================================================
 // STAT CARD COMPONENT
@@ -81,7 +81,7 @@ function StatCard({ title, value, description, variant = 'default', isLoading }:
  * ```
  */
 export function RiskSummaryCards() {
-  const stats = usePatientStore(selectStats);
+  const stats = usePatientStats();
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

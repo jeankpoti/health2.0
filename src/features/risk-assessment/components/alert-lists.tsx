@@ -14,9 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   usePatientStore,
-  selectHighRiskPatients,
-  selectFeverPatients,
-  selectDataQualityIssues,
+  useHighRiskPatients,
+  useFeverPatients,
+  useDataQualityIssues,
 } from '../store/patient-store';
 
 // ============================================================================
@@ -117,9 +117,9 @@ function PatientListCard({
  * ```
  */
 export function AlertLists() {
-  const highRiskPatients = usePatientStore(selectHighRiskPatients);
-  const feverPatients = usePatientStore(selectFeverPatients);
-  const dataQualityIssues = usePatientStore(selectDataQualityIssues);
+  const highRiskPatients = useHighRiskPatients();
+  const feverPatients = useFeverPatients();
+  const dataQualityIssues = useDataQualityIssues();
   const isLoading = usePatientStore((state) => state.isLoading);
 
   return (

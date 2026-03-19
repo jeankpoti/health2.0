@@ -21,6 +21,7 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { fetchAllPatients, submitAssessment } from '../services/patient-api';
 import { calculatePatientRisk, categorizePatients } from '../utils/risk-calculator';
 import type { Patient, PatientWithRisk, CategorizedPatients, AssessmentPayload } from '../types';
@@ -219,37 +220,54 @@ export const usePatientStore = create<PatientStore>()(
 );
 
 // ============================================================================
-// SELECTORS
+// SELECTORS (using useShallow to prevent infinite re-renders)
 // ============================================================================
 
-/**
- * Selector for high-risk patient IDs.
- */
-export const selectHighRiskPatients = (state: PatientStore): string[] =>
-  state.categories?.highRiskPatients ?? [];
+/** Empty array constant to avoid creating new references */
+const EMPTY_ARRAY: string[] = [];
 
 /**
- * Selector for fever patient IDs.
+ * Hook for high-risk patient IDs with shallow comparison.
  */
-export const selectFeverPatients = (state: PatientStore): string[] =>
-  state.categories?.feverPatients ?? [];
+export const useHighRiskPatients = () => {
+  return usePatientStore(
+    useShallow((state) => state.categories?.highRiskPatients ?? EMPTY_ARRAY)
+  );
+};
 
 /**
- * Selector for data quality issue patient IDs.
+ * Hook for fever patient IDs with shallow comparison.
  */
-export const selectDataQualityIssues = (state: PatientStore): string[] =>
-  state.categories?.dataQualityIssues ?? [];
+export const useFeverPatients = () => {
+  return usePatientStore(
+    useShallow((state) => state.categories?.feverPatients ?? EMPTY_ARRAY)
+  );
+};
 
 /**
- * Selector for summary statistics.
+ * Hook for data quality issue patient IDs with shallow comparison.
  */
-export const selectStats = (state: PatientStore) => ({
-  totalPatients: state.patients.length,
-  highRiskCount: state.categories?.highRiskPatients.length ?? 0,
-  feverCount: state.categories?.feverPatients.length ?? 0,
-  dataQualityCount: state.categories?.dataQualityIssues.length ?? 0,
-  isLoading: state.isLoading,
-});
+export const useDataQualityIssues = () => {
+  return usePatientStore(
+    useShallow((state) => state.categories?.dataQualityIssues ?? EMPTY_ARRAY)
+  );
+};
+
+/**
+ * Hook for summary statistics with shallow comparison.
+ * Uses useShallow to prevent infinite re-renders.
+ */
+export const usePatientStats = () => {
+  return usePatientStore(
+    useShallow((state) => ({
+      totalPatients: state.patients.length,
+      highRiskCount: state.categories?.highRiskPatients.length ?? 0,
+      feverCount: state.categories?.feverPatients.length ?? 0,
+      dataQualityCount: state.categories?.dataQualityIssues.length ?? 0,
+      isLoading: state.isLoading,
+    }))
+  );
+};
 
 /**
  * Selector for loading progress as percentage.

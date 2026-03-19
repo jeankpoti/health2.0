@@ -24,10 +24,10 @@ export { AlertLists } from './components/alert-lists';
 // Store
 export {
   usePatientStore,
-  selectHighRiskPatients,
-  selectFeverPatients,
-  selectDataQualityIssues,
-  selectStats,
+  useHighRiskPatients,
+  useFeverPatients,
+  useDataQualityIssues,
+  usePatientStats,
   selectLoadingProgress,
 } from './store/patient-store';
 

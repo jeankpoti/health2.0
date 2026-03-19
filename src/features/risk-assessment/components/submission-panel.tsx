@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   usePatientStore,
   selectLoadingProgress,
-  selectStats,
+  usePatientStats,
 } from '../store/patient-store';
 
 // ============================================================================
@@ -138,14 +138,16 @@ export function SubmissionPanel() {
   const submissionError = usePatientStore((state) => state.submissionError);
   const submission = usePatientStore((state) => state.submission);
   const loadingProgress = usePatientStore(selectLoadingProgress);
-  const stats = usePatientStore(selectStats);
+  const stats = usePatientStats();
 
-  // Auto-fetch patients on mount
+  // Auto-fetch patients on mount (only once)
+  const hasFetchedRef = useRef(false);
   useEffect(() => {
-    if (stats.totalPatients === 0 && !isLoading && !error) {
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchPatients();
     }
-  }, [stats.totalPatients, isLoading, error, fetchPatients]);
+  }, [fetchPatients]);
 
   const hasPatients = stats.totalPatients > 0;
 

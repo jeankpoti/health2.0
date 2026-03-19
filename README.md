@@ -21,6 +21,19 @@ A modern, production-ready Next.js application for patient risk scoring and heal
 
 ---
 
+## Screenshots
+
+### Dashboard (Light Mode)
+![Dashboard Light Mode](docs/screenshots/Healthcare-Risk-Assessment-light-mode.png)
+
+### Dashboard (Dark Mode)
+![Dashboard Dark Mode](docs/screenshots/Healthcare-Risk-Assessment-dark-mode.png)
+
+### Assessment Results
+![Assessment Results](docs/screenshots/results.png)
+
+---
+
 ## Quick Start
 
 ### Prerequisites
